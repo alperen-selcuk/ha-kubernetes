@@ -1,3 +1,5 @@
+#keepalive install
+
 apt update && apt install -y keepalived haproxy
 
 #keepalive script
@@ -37,7 +39,7 @@ vrrp_instance VI_1 {
     advert_int 5
     authentication {
         auth_type PASS
-        auth_pass mysecret
+        auth_pass devopsdude
     }
     virtual_ipaddress {
         <VIP>
@@ -47,3 +49,36 @@ vrrp_instance VI_1 {
     }
 }
 EOF
+
+#keepalive start
+
+systemctl enable --now keepalived
+
+
+#haproxy install and config
+
+apt-get install haproxy -y
+
+
+cat >> /etc/haproxy/haproxy.cfg <<EOF
+
+frontend kubernetes-frontend
+  bind *:6443
+  mode tcp
+  option tcplog
+  default_backend kubernetes-backend
+
+backend kubernetes-backend
+  option httpchk GET /healthz
+  http-check expect status 200
+  mode tcp
+  option ssl-hello-chk
+  balance roundrobin
+    server master1 <master1-IP>:6443 check fall 3 rise 2
+    server master2 <master2-IP>:6443 check fall 3 rise 2
+    server master3 <master3-IP>:6443 check fall 3 rise 2
+
+EOF
+
+
+systemctl enable haproxy && systemctl restart haproxy
